@@ -17,6 +17,12 @@ if ( !empty($_GET['from']) && !empty($_GET['to']) ) {
 	$to = $_GET['to'];
 }
 
+if ( empty($_GET['fromdate'] ) ) {
+	$_GET['fromdate'] = '2000-01-01';
+} else {
+	var_dump($_GET);
+}
+
 // Make friendly names since not everyone knows the country codes, and it looks nicer.
 $countries = array(
 	'AU' => 'Austria',
@@ -143,11 +149,11 @@ $db = new SQLite3('ratings.sqlite');
 	$res = $fromq->execute();
 	while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
 		if ( $row['iso_3166_1'] == $from  && in_array($row['certification'],$seen_fcerts) ) {
-			$nodes[0][] = array("label" => $row['certification'] . ' (' . $from . ')',"meaning" => $row['meaning'], "certification" => $row['certification']);
+			$nodes[0][] = array("label" => $row['certification'],"meaning" => $row['meaning'], "certification" => $row['certification']);
 			$from_certs[] = $row['certification'];
 		} 
 		if ( $row['iso_3166_1'] == $to && in_array($row['certification'],$seen_tcerts) ){
-			$nodes[1][] = array("label" => $row['certification'] . ' (' . $to . ')',"meaning" => $row['meaning'], "certification" => $row['certification']);
+			$nodes[1][] = array("label" => $row['certification'],"meaning" => $row['meaning'], "certification" => $row['certification']);
 			$to_certs[] = $row['certification'];
 		}
 	}
@@ -196,14 +202,17 @@ print "let links = " . json_encode($links) . ";\n";
 print "new PlotCreator(
 	document.getElementById('ratingmap'), nodes, links, 800, 600, 0, 2,
 {
-	plot_background_color: '#f4edf7',
+	plot_background_color: '#e6ffe6',
 default_links_opacity: 0.8,
 default_gradient_links_opacity: 0.8,
 	lines_style_object: {stroke:'black','stroke-opacity':0.2},
 		vertical_gap_between_nodes: 0.5,
 		show_column_lines: false,
 		column_names_style_object: { color:'black', opacity:0.6,},
-		column_names: ['{$countries[$from]}','{$countries[$to]}']
+		column_names: ['{$countries[$from]}','{$countries[$to]}'],
+			on_link_hover_function: function(link_info,link_data_reference,link_element,event) {
+			return 'There were ' + link_info.value + ' movies rated ' + link_info.from_label + ' in ' + link_info.from_column + ' which were rated ' + link_info.to_label + ' in ' + link_info.to_column + ' for the selected date range';
+			}
 		}
 	)";
 print "</script>";
@@ -242,6 +251,7 @@ foreach($countries as $iso => $label){
 		<div id="ratingmap"></div>
 <?php
 
+print "<div class='rating leftrating'>";
 print "<h2>Certifications for " . $countries[$from] . "</h2>";
 print "<table>";
 print "<tr><th>Certification</th><th>Definition</th></tr>";
@@ -249,7 +259,9 @@ foreach($nodes[0] as $cert){
 	print "<tr><td>" . $cert['label'] . "</td><td>" . $cert['meaning'] . "</td></tr>";
 }
 print "</table>";
+print "</div>";
 
+print "<div class='rating rightrating'>";
 print "<h2>Certifications for " . $countries[$to] . "</h2>";
 print "<table>";
 print "<tr><th>Certification</th><th>Definition</th></tr>";
@@ -257,9 +269,9 @@ foreach($nodes[1] as $cert){
 	print "<tr><td>" . $cert['label'] . "</td><td>" . $cert['meaning'] . "</td></tr>";
 }
 print "</table>";
-?>
-<h2>Top 50 Movies with the Biggest Ratings Differences</h2>
-<?php
+print "</div>";
+
+print '<h2>Top Movies with the Biggest Ratings Differences</h2>';
 
 $diffq =
 	"SELECT
@@ -268,6 +280,8 @@ $diffq =
 	m.movie_id,
 	m.title,
 	m.release_date,
+	f.release_date frdate,
+	t.release_date trdate,
 	f.iso_3166_1 fiso,
 	f.certification fcert,
 	t.iso_3166_1 tiso,
@@ -293,6 +307,7 @@ if ( !empty($_GET['todate']) ) {
 
 $diffq .= "
 
+AND f.certification <> t.certification
 AND f.iso_3166_1=:from
 AND f.release_type=3
 AND f.certification <> 'NR'
@@ -318,8 +333,8 @@ ORDER BY ABS(
 					WHERE iso_3166_1=:to
 					ORDER BY certorder DESC
 				)
-			)
-		DESC
+			) DESC,
+		m.release_date DESC
 
 LIMIT 50
 ";
@@ -340,37 +355,48 @@ $res = $diffq->execute();
 
 
 print '<table>';
-print '<tr><th>Title</th><th>Release Date</th><th>Rating in ' . $countries[$from] . '</th><th>Rating in ' . $countries[$to] . '</th><tr>';
+print '<tr><th>Title</th><th>Original Release Date</th><th>Rating in ' . $countries[$from] . '</th><th>Rating in ' . $countries[$to] . '</th><tr>';
+$last_movie_id = NULL;
 while($row = $res->fetchArray(SQLITE3_ASSOC)){
+	if ( $row['movie_id'] == $last_movie_id ) {
+		continue;
+	}
+	$last_movie_id = $row['movie_id'];
 	print '<tr>';
 	print "<td><a href='https://www.themoviedb.org/movie/{$row['movie_id']}' rel='nofollow' target='_blank'>" . htmlentities($row['title']) . '</td>';
 	print '<td>' . htmlentities($row['release_date']) . '</td>';
-	print '<td style="background-color:' . $f_rating_to_color[$row['fcert']] . '">' . $row['fcert'] . '</td>';
-	print '<td style="background-color:' . $t_rating_to_color[$row['tcert']] . '">' . $row['tcert'] . '</td>';
+	print '<td style="background-color:' . $f_rating_to_color[$row['fcert']] . '">' . $row['fcert'] . ' (' . date('Y-m-d',strtotime($row['frdate'])) . ')</td>';
+	print '<td style="background-color:' . $t_rating_to_color[$row['tcert']] . '">' . $row['tcert'] . ' (' . date('Y-m-d',strtotime($row['trdate'])) . ')</td>';
 	print '</tr>';
 }
-?>
 
-</table>
-<h3>Info</h3>
-<?php
+print '</table>';
+print '<h3>Info</h3>';
 
 $total_movies = 0;
 foreach($links as $link) {
 	$total_movies += $link['value'];
 }
 
-print "I found " . $total_movies . " movies with a theatrical release in both " . $countries[$from] . " and " . $countries[$to];
+print "<p>I found " . $total_movies . " movies with a theatrical release in both " . $countries[$from] . " and " . $countries[$to];
 if ( !empty($_GET['fromdate']) && !empty($_GET['todate']) ) {
 	print " between " . $_GET['fromdate'] . " and " . $_GET['todate'] . ". ";
 } else if ( !empty($_GET['fromdate']) ) {
-	print " after . " . $_GET['fromdate'] . ". ";
+	print " after  " . $_GET['fromdate'] . ". ";
 } else if ( !empty($_GET['todate']) ) {
-	print " before . " . $_GET['todate'] . ". ";
+	print " before  " . $_GET['todate'] . ". ";
 } else {
 	print ". ";
 }
-print "I excluded any movies with a listed NR (Not Rated) entry in the data, since NR is not an official rating. If you notice something that is wrong, please consider submiting a correction to themoviedb.org. ";
+
+$total_movies = $db->querySingle('SELECT COUNT(*) FROM movies WHERE title <> "TMDB Code 34" AND NOT adult');
+
+print "I know of $total_movies movies in total, but not all of them have both {$countries[$from]} and {$countries[$to]} certification info.</p>";
+print "<p>I excluded any movies with a listed NR (Not Rated) entry in the data, since NR is not an official rating. I also excluded any movies flagged as <i>adult</i>. ";
+print "If you notice incorrect data, please consider submiting a correction to themoviedb.org.</p>";
+
+print "<p>Rating criteria drift over time as social norms change. I have set the default start date to 2020-01-01 to try to only consider more recent ratings. You can delete the date from the form to see a listing of all dates.</p>";
+
 ?>
 <ul>
 <li>All data from <a href="https://www.themoviedb.org/">https://www.themoviedb.org/</a>.</li>

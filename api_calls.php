@@ -1,16 +1,15 @@
 <?php
 
+// $just_get_missing = true;
+
 // https://developers.themoviedb.org/
 $api_key = trim(file_get_contents('./api_key.txt'));
-
-var_dump($api_key);
 
 // How big of batches to collect before inserting
 $insert_size = 100; 
 
 // SQLite location
 $db = new SQLite3('ratings.sqlite'); 
-
 
 // Get latest ID. We will loop from 0 up to this number
 $latest = json_decode(file_get_contents("https://api.themoviedb.org/3/movie/latest?api_key={$api_key}&language=en-US"),TRUE);
@@ -36,13 +35,13 @@ $db->exec($sql);
 $sql = "CREATE TABLE IF NOT EXISTS movies (
 	movie_id INTEGER PRIMARY KEY,
 	title TEXT,
-	release_date DATE
+	release_date DATE,
+	adult BOOL
 );";
 
 $db->exec($sql);
 
 // Every movie can have 0 or more releases, every release may have a rating
-// We will only store releases with ratings, and we will be skipping adult films
 $sql = "CREATE TABLE IF NOT EXISTS ratings (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	movie_id INTEGER,
@@ -56,15 +55,9 @@ $db->exec($sql);
 
 
 $insert_certification = $db->prepare("INSERT INTO certifications (iso_3166_1,certification,meaning,certorder) VALUES (:iso_3166_1,:certification,:meaning,:certorder)");
-$insert_movie = $db->prepare("INSERT INTO movies (movie_id,title,release_date) VALUES (:movie_id,:title,:release_date)");
+$insert_movie = $db->prepare("INSERT INTO movies (movie_id,title,release_date,adult) VALUES (:movie_id,:title,:release_date,:adult)");
 $insert_rating = $db->prepare("INSERT INTO ratings (movie_id,iso_3166_1,certification,note,release_date,release_type) VALUES (:movie_id,:iso_3166_1,:certification,:note,:release_date,:release_type)");
 
-// Get the starting ID from the DB or start from 0
-$movie_id = $db->querySingle("SELECT MAX(movie_id) FROM movies");
-if ( !$movie_id ) {
-	$movie_id = 0;
-}
-$movie_id++;
 
 // Dump all the release date info
 $movies_data = array();
@@ -93,8 +86,39 @@ if ( $res = curl_exec($ch) ) {
 	die("No certs found");
 }
 
+
+// Get all missing IDs into an array
+if ( $just_get_missing ) {
+	$res = $db->query("SELECT movie_id FROM movies ORDER BY movie_id");
+
+	$fetch_me = array();
+
+	// idx always holds the next expected value
+	$idx = 1;
+	while($row = $res->fetchArray(SQLITE3_ASSOC)){
+
+		// As long as idx is smaller than expected, then we missed an ID.
+		while($idx < $row['movie_id']){
+			$fetch_me[] = $idx;
+			$idx++;
+		}
+
+		// Now $idx should equal $row['movie_id'], which we don't add to $missing, now bump it to the next value which should be the next record
+		$idx++;
+	}
+} else {
+	// Get the starting ID from the DB or start from 0
+	$movie_id = $db->querySingle("SELECT MAX(movie_id) FROM movies");
+	if ( !$movie_id ) {
+		$movie_id = 0;
+	}
+	$movie_id++;
+
+	$fetch_me = range($movie_id,$latest_id);
+}
+
 print("00.00%");
-for($movie_id;$movie_id<=$latest_id;$movie_id++) {
+foreach($fetch_me as $movie_id){
 	$percent = str_pad(number_format($movie_id / $latest_id * 100,2),5);
 
 	// Status update line. \33[2K\r puts the cursor at the start of the current line
@@ -108,23 +132,23 @@ for($movie_id;$movie_id<=$latest_id;$movie_id++) {
 	}
 
 	if (array_key_exists('status_code',$movie) && $movie['status_code'] == 34) {
-		continue;
-	}
-
-	// Skip adult. We're mapping ratings, and adult is adult
-	if ($movie['adult']) {
-		continue;
-	}
-
-	if ( empty($movie['release_dates']) || empty($movie['release_dates']['results']) ) {
-		continue;
-	}
+		$movie['id'] = $movie_id;
+		$movie['adult'] = false;
+		$movie['title'] = "TMDB Code 34";
+		$movie['release_date'] = "FALSE";
+		$movie['release_dates'] = array(
+			'results' => array()
+		);
+		}
 
 	$movie_data = array(
 		'movie_id' => $movie['id'],
 		'title' => $movie['title'],
-		'release_date' => $movie['release_date']
+		'release_date' => $movie['release_date'],
+		'adult' => $movie['adult']
 	);
+
+	$movies_data[$movie['id']] = $movie_data;
 
 	foreach($movie['release_dates']['results'] as $country_releases){
 
@@ -136,9 +160,6 @@ for($movie_id;$movie_id<=$latest_id;$movie_id++) {
 			if ( empty($release['certification']) ) {
 				continue;
 			} else {
-				// Inefficient but easy
-				$movies_data[$movie['id']] = $movie_data;
-
 				@$release_data[] = array(
 					'movie_id' => $movie['id'],
 					'iso_3166_1' => $country_releases['iso_3166_1'],
@@ -159,6 +180,7 @@ for($movie_id;$movie_id<=$latest_id;$movie_id++) {
 			$insert_movie->bindValue(':movie_id',$movie_data['movie_id'],SQLITE3_INTEGER);
 			$insert_movie->bindValue(':title',$movie_data['title'],SQLITE3_TEXT);
 			$insert_movie->bindValue(':release_date',$movie_data['release_date'],SQLITE3_TEXT);
+			$insert_movie->bindValue(':adult',$movie_data['adult'],SQLITE3_INTEGER);
 			$insert_movie->execute();
 			$insert_movie->reset();
 		}

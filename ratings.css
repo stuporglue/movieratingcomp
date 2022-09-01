@@ -3,7 +3,7 @@
 	margin-top: 40px;
 	width: 100%;
 	text-align: center;
-	background-color: #f4edf7;
+	background-color: #e6ffe6;
 }
 
 path[identifier="SankeyLink"] {
@@ -22,4 +22,8 @@ table {
 
 td,th {
 	border: 1px solid black;
+}
+
+table tr:nth-of-type(even) {
+	background-color: #e6ffe6;
 }
