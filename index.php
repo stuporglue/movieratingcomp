@@ -188,7 +188,8 @@ $t_rating_to_color = array();
 <html>
 	<head>
 		<meta charset="utf-8">
-		<title>Movie Ratings Mapping between <?php print $countries[$from];?> and <?php print $countries[$to];?></title>
+		<meta name="viewport" content="width=device-width,initial-scale=1"/>
+		<title>Movie Ratings Comparison between <?php print $countries[$from];?> and <?php print $countries[$to];?></title>
 		<link rel="stylesheet" href='./SanKEY.js/SanKEY_styles.css'>
 		<link rel="stylesheet" href='ratings.css'>
 <?php
@@ -199,7 +200,7 @@ print "let nodes = " . json_encode($nodes) . ";\n";
 print "let links = " . json_encode($links) . ";\n";
 
 print "new PlotCreator(
-	document.getElementById('ratingmap'), nodes, links, 800, 600, 0, 2,
+	document.getElementById('ratingmap'), nodes, links, document.body.clientWidth, Math.min(600,window.innerHeight), 0, 2,
 {
 	plot_background_color: '#e6ffe6',
 default_links_opacity: 0.8,
@@ -240,8 +241,8 @@ foreach($countries as $iso => $label){
 
 			<br>
 			<br>
-			<label for="fromdate">Earliest Date</label><input type="date" name="fromdate" <?php if ( !empty($_GET['fromdate']) ){ print "value='{$_GET['fromdate']}'"; }?>></label>
-			<label for="todate">Latest Date</label><input type="date" name="todate" <?php if ( !empty($_GET['todate']) ){ print "value='{$_GET['todate']}'"; }?>></label>
+			<label for="fromdate">Earliest Date: </label><input type="date" name="fromdate" <?php if ( !empty($_GET['fromdate']) ){ print "value='{$_GET['fromdate']}'"; }?>></label>
+			<label for="todate">Latest Date: </label><input type="date" name="todate" <?php if ( !empty($_GET['todate']) ){ print "value='{$_GET['todate']}'"; }?>></label>
 			<br>
 			<br>
 			<input type="submit" value="Change">
@@ -396,9 +397,15 @@ print "If you notice incorrect data, please consider submiting a correction to t
 
 print "<p>Rating criteria drift over time as social norms change. I have set the default start date to 2020-01-01 to try to only consider more recent ratings. You can delete the date from the form to see a listing of all dates.</p>";
 
+print "<p>The <em>Top Movies with the Biggest Ratings Differences</em> list is limited to up to 50 movies.</p>";
+
+
 ?>
+<h3>About</h3>
+<p> This is a movie rating (certification) comparison visualization between different countries, based on data from TMDB. I created it because my family just moved to Germany and I wanted to understand the movie rating system as my kids were asking about watching different shows.</p>
 <ul>
 <li>All data from <a href="https://www.themoviedb.org/">https://www.themoviedb.org/</a>.</li>
 <li>Sankey diagram code from <a href="https://github.com/Krzysiekzd/SanKEY.js">https://github.com/Krzysiekzd/SanKEY.js</a></li>
+<li>Code (but not data) is available on GitHub <a href="https://github.com/stuporglue/movieratingcomp">https://github.com/stuporglue/movieratingcomp</a></li>
 	</body>
 </html>

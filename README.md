@@ -29,6 +29,7 @@ Caveats & Notes
  * Not all countries are represented, and different countries have different amounts of coverage (but everything in TheMovieDB is shown)
  * For this comparison only the ratings for theatrical releases of non-adult movies are considered
  * Some contradictions appear, such as _The Big Red One_ having both a PG and R rating are due to TMDB listing the original 1980 and a later re-rating as theatrical releases. 
+ * I know the PHP isn't super clean or pretty. I just wanted to easily see the data. If it bothers you, I'm happy to take any cleanup pull requests.
 
 To calculate the greatest differences between movie certification systems, here's what I did. Every certification is listed in order, with an index. Eg. for the US system we have _G (0), PG (1), PG-13 (2), R (3), NC-17 (4)_. I found how far up the certification list a rating was by dividing the max index by the movie's index. So a PG movie would be 1/4 (PG/NC-17), or 0.25. By doing the same for the other country's certification system I could compare a German 12 (1/3, 0.33) to a US PG. I took the absolute value of the difference between the two country ratings for a movie, and sorted by this value in descending order. 
 
