@@ -17,10 +17,9 @@ if ( !empty($_GET['from']) && !empty($_GET['to']) ) {
 	$to = $_GET['to'];
 }
 
-if ( empty($_GET['fromdate'] ) ) {
+// Default to 2000-01-01
+if ( !isset($_GET['fromdate'] ) ) {
 	$_GET['fromdate'] = '2000-01-01';
-} else {
-	var_dump($_GET);
 }
 
 // Make friendly names since not everyone knows the country codes, and it looks nicer.
